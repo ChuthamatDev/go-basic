@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"log"
+	"strconv"
 	"strings"
 
 	"go-fiber-test/database"
@@ -14,6 +15,7 @@ import (
 func HelloTest(c * fiber.Ctx) error {
 	return c.SendString("Hello, World!")
 }
+
 func HelloTestV2(c * fiber.Ctx) error {
 	return c.SendString("Hello, World! V2")
 }
@@ -168,6 +170,24 @@ func GetDogsJson(c *fiber.Ctx) error {
    }
    return c.Status(200).JSON(r)
 }
+
+func Factorial(c *fiber.Ctx) error {
+	num, err := strconv.Atoi(c.Params("number"))
+	if err != nil || num < 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid non-negative integer"})
+	}
+
+	fact := 1
+	for i := 2; i <= num; i++ {
+		fact *= i
+	}
+
+	return c.JSON(fiber.Map{
+		"number":    num,
+		"factorial": fact,
+	})
+}
+
 
 
 

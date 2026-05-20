@@ -19,4 +19,9 @@ type Dogs struct {
 	DogID int    `json:"dog_id"`
 }
 
+type Facts struct {
+	gorm.Model
+	Fact string `json:"fact"`
+}
+
 

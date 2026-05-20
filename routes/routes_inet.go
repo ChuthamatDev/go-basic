@@ -10,8 +10,12 @@ import (
 func InetRoutes(app *fiber.App) {
 	app.Use(basicauth.New(basicauth.Config{
 		Users: map[string]string{
-			"john":  "doe",
-			"admin": "123456",
+			"gofiber": "21022566",
+		},
+		Unauthorized: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Unauthorized access",
+			})
 		},
 	}))
 
@@ -24,6 +28,7 @@ func InetRoutes(app *fiber.App) {
 	v1.Get("/",controllers.HelloTest )
 	v1.Post("/",controllers.BodyPersonTest )
 	v1.Get("/user/:name",controllers.ParamsTest )
+	v1.Get("/fact/:number",controllers.Factorial )
 	v1.Post("/inet",controllers.QueryTest )
 	v1.Post("/valid",controllers.ValidTest )
 
@@ -36,5 +41,7 @@ func InetRoutes(app *fiber.App) {
    dog.Put("/:id", controllers.UpdateDog)
    dog.Delete("/:id", controllers.RemoveDog)
 
-
+   //Factorial
+	fact := v1.Group("/fact")
+	fact.Get("/:number", controllers.Factorial)
 }
