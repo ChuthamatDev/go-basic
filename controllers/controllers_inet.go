@@ -1,7 +1,8 @@
 package controllers
 
 import (
-	"log"
+	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -11,6 +12,73 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 )
+
+
+var validate = validator.New()
+
+var (
+	usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+	validBizTypes = map[string]struct{}{"E-commerce": {}, "Service": {}, "IT": {}, "Consulting": {}, "Other": {}}
+	subdomainRegex = regexp.MustCompile(`^[a-z0-9.-]{2,30}$`)
+)
+
+func init() {
+	validate.RegisterValidation("username_custom", func(fl validator.FieldLevel) bool {
+		return usernameRegex.MatchString(fl.Field().String())
+	})
+
+	validate.RegisterValidation("business_type_custom", func(fl validator.FieldLevel) bool {
+		_, ok := validBizTypes[fl.Field().String()]
+		return ok
+	})
+
+	validate.RegisterValidation("website_custom", func(fl validator.FieldLevel) bool {
+		value := fl.Field().String()
+
+		if !subdomainRegex.MatchString(value) {
+			return false
+		}
+
+		allowedSuffixes := []string{
+			".sogodweb.com",
+			".sogodweb.co.th",
+			".sogodweb.in.th",
+		}
+		for _, suffix := range allowedSuffixes {
+			if strings.HasSuffix(value, suffix) {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+func formatValidationErrors(errs validator.ValidationErrors) []string {
+	var errorMessages []string
+	for _, err := range errs {
+		var message string
+		switch err.Tag() {
+		case "required":
+			message = fmt.Sprintf("ฟิลด์ %s เป็นข้อมูลที่จำเป็น", err.Field())
+		case "email":
+			message = "รูปแบบอีเมลไม่ถูกต้อง"
+		case "min":
+			message = fmt.Sprintf("ฟิลด์ %s ต้องมีความยาวอย่างน้อย %s ตัวอักษร", err.Field(), err.Param())
+		case "max":
+			message = fmt.Sprintf("ฟิลด์ %s ต้องมีความยาวไม่เกิน %s ตัวอักษร", err.Field(), err.Param())
+		case "username_custom":
+			message = "Username ใช้อักษรภาษาอังกฤษ (a-z, A-Z), ตัวเลข (0-9) และเครื่องหมาย (_), (-) เท่านั้น"
+		case "business_type_custom":
+			message = "ประเภทธุรกิจที่เลือกไม่ถูกต้อง"
+		case "website_custom":
+			message = "Website ต้องเป็น subdomain ที่ลงท้ายด้วย .sogodweb.com, .sogodweb.co.th, หรือ .sogodweb.in.th"
+		default:
+			message = fmt.Sprintf("ข้อมูลฟิลด์ %s ไม่ถูกต้อง", err.Field())
+		}
+		errorMessages = append(errorMessages, message)
+	}
+	return errorMessages
+}
 
 func HelloTest(c * fiber.Ctx) error {
 	return c.SendString("Hello, World!")
@@ -26,11 +94,7 @@ func BodyPersonTest(c *fiber.Ctx) error {
 	if err := c.BodyParser(p); err != nil {
 		return err
 	}
-
-	log.Println(p.Name) // john
-	log.Println(p.Pass) // doe
-	str := p.Name + p.Pass
-	return c.JSON(str)
+	return c.JSON(p)
 }
 
 func ParamsTest(c *fiber.Ctx) error {
@@ -40,25 +104,23 @@ func ParamsTest(c *fiber.Ctx) error {
 }
 
 func QueryTest(c *fiber.Ctx) error {
+
 	a := c.Query("search")
 	str := "my search is  " + a
 	return c.JSON(str)
 }
 
 func ValidTest(c *fiber.Ctx) error {
-	//Connect to database
-
 	user := new(m.User)
 	if err := c.BodyParser(&user); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"message": err.Error(),
-		})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
 	}
-	validate := validator.New()
-	errors := validate.Struct(user)
-	if errors != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(errors.Error())
+
+	if err := validate.Struct(user); err != nil {
+		errors := formatValidationErrors(err.(validator.ValidationErrors))
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Validation failed", "errors": errors})
 	}
+
 	return c.JSON(user)
 }	
 
@@ -66,7 +128,7 @@ func GetDogs(c *fiber.Ctx) error {
    db := database.DBConn
    var dogs []m.Dogs
 
-   db.Find(&dogs) //delelete = null
+   db.Find(&dogs)
    return c.Status(200).JSON(dogs)
 }
 
@@ -77,20 +139,18 @@ func GetDog(c *fiber.Ctx) error {
 
    result := db.Find(&dog, "dog_id = ?", search)
 
-   // returns found records count, equals `len(users)
    if result.RowsAffected == 0 {
-       return c.SendStatus(404)
+       return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Dog not found"})
    }
    return c.Status(200).JSON(&dog)
 }
 
 func AddDog(c *fiber.Ctx) error {
-   //twst3
    db := database.DBConn
    var dog m.Dogs
 
    if err := c.BodyParser(&dog); err != nil {
-       return c.Status(503).SendString(err.Error())
+       return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
    }
 
    db.Create(&dog)
@@ -103,7 +163,7 @@ func UpdateDog(c *fiber.Ctx) error {
    id := c.Params("id")
 
    if err := c.BodyParser(&dog); err != nil {
-       return c.Status(503).SendString(err.Error())
+       return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
    }
 
    db.Where("id = ?", id).Updates(&dog)
@@ -118,79 +178,266 @@ func RemoveDog(c *fiber.Ctx) error {
    result := db.Delete(&dog, id)
 
    if result.RowsAffected == 0 {
-       return c.SendStatus(404)
+       return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Dog not found"})
    }
 
    return c.SendStatus(200)
+}
+
+func transformToDogsRes(dogs []m.Dogs) []m.DogsRes {
+	dataResults := make([]m.DogsRes, 0, len(dogs))
+	for _, v := range dogs {
+		var typeStr string
+		switch v.DogID {
+		case 111:
+			typeStr = "red"
+		case 113:
+			typeStr = "green"
+		case 999:
+			typeStr = "pink"
+		default:
+			typeStr = "no color"
+		}
+
+		d := m.DogsRes{
+			Name:  v.Name,
+			DogID: v.DogID,
+			Type:  typeStr,
+		}
+		dataResults = append(dataResults, d)
+	}
+	return dataResults
 }
 
 func GetDogsJson(c *fiber.Ctx) error {
    db := database.DBConn
    var dogs []m.Dogs
 
-   db.Find(&dogs) //10ตัว
+   db.Find(&dogs)
 
-   type DogsRes struct {
-       Name  string `json:"name"`
-       DogID int    `json:"dog_id"`
-       Type  string `json:"type"`
-   }
-
-   var dataResults []DogsRes
-   for _, v := range dogs { //1 inet 112 //2 inet1 113
-       typeStr := ""
-       if v.DogID == 111 {
-           typeStr = "red"
-       } else if v.DogID == 113 {
-           typeStr = "green"
-       } else if v.DogID == 999 {
-           typeStr = "pink"
-       } else {
-           typeStr = "no color"
-       }
-
-       d := DogsRes{
-           Name:  v.Name,  //inet
-           DogID: v.DogID, //112
-           Type:  typeStr, //no color
-       }
-       dataResults = append(dataResults, d)
-       // sumAmount += v.Amount
-   }
-
-   type ResultData struct {
-       Data  []DogsRes `json:"data"`
-       Name  string    `json:"name"`
-       Count int       `json:"count"`
-   }
-   r := ResultData{
-       Data:  dataResults,
+   r := m.ResultData{
+       Data:  transformToDogsRes(dogs),
        Name:  "golang-test",
-       Count: len(dogs), //หาผลรวม,
+       Count: len(dogs),
    }
    return c.Status(200).JSON(r)
 }
 
-func Factorial(c *fiber.Ctx) error {
-	num, err := strconv.Atoi(c.Params("number"))
-	if err != nil || num < 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid non-negative integer"})
+func transformToDogsResV2(dogs []m.Dogs) []m.DogsRes {
+	dataResults := make([]m.DogsRes, 0, len(dogs))
+	for _, v := range dogs {
+		var typeStr string
+		id := v.DogID
+
+		if id >= 10 && id <= 50 {
+			typeStr = "red"
+		} else if id >= 100 && id <= 150 {
+			typeStr = "green"
+		} else if id >= 200 && id <= 250 {
+			typeStr = "pink"
+		} else {
+			typeStr = "no color"
+		}
+
+		d := m.DogsRes{
+			Name:  v.Name,
+			DogID: v.DogID,
+			Type:  typeStr,
+		}
+		dataResults = append(dataResults, d)
+	}
+	return dataResults
+}
+
+// 7.2 สร้างข้อมูลในตารางdog มากกว่า10ตัว (api add dog) GetdogJsonEndpoint
+func GetDogsJsonV2Endpoint(c *fiber.Ctx) error {
+	db := database.DBConn
+	var dogs []m.Dogs
+
+	db.Find(&dogs)
+
+	r := m.ResultDataV2{
+		Data:     transformToDogsResV2(dogs),
+		NameDog:  "golang-test-v2",
+		CountSum: len(dogs),
+	}
+	return c.Status(fiber.StatusOK).JSON(r)
+}
+
+// 7.0.2 สร้าง api GET ใน group dogs ที่มีการลบไปแล้ว
+func GetDeletedDogsEndpoint(c *fiber.Ctx) error {
+	db := database.DBConn
+	var dogs []m.Dogs
+
+	db.Unscoped().Where("deleted_at IS NOT NULL").Find(&dogs)
+	return c.Status(fiber.StatusOK).JSON(dogs)
+}
+
+// 7.1 GetDogsRange ดึงข้อมูล dog_id > 50 และ < 100
+func GetDogsRangeEndpoint(c *fiber.Ctx) error {
+	db := database.DBConn
+	var dogs []m.Dogs
+
+	db.Where("dog_id > ? AND dog_id < ?", 50, 100).Find(&dogs)
+	return c.Status(fiber.StatusOK).JSON(dogs)
+}
+
+// 5.1 สร้าง Factorial 
+func FactorialEndpoint(c *fiber.Ctx) error {
+
+    param := c.Params("number")
+
+    if param == "" {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาระบุตัวเลข"})
+    }
+
+	// ดักจับขอบเขตข้อมูล
+    num, err := strconv.Atoi(param)
+
+    if err != nil || num < 0 {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "กรุณากรอกตัวเลขจำนวนเต็มบวกที่ถูกต้อง"})
+    }
+
+	//Integer Overflow ค่า 21 แฟกทอเรียลจะมีขนาดบิตที่ใหญ่เกินขอบเขตของประเภทข้อมูล int64
+    if num > 20 { 
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ตัวเลขมีขนาดใหญ่เกินไป (รองรับสูงสุดคือ 20)"})
+    }
+
+    fact := 1
+	steps := "1"
+    for i := 2; i <= num; i++ {
+        fact *= i
+		steps = steps + "x" + strconv.Itoa(i)
+    }
+
+    return c.JSON(fiber.Map{
+        "number":    num,
+		"calculation": steps,
+        "factorial": fact,
+    })
+}
+
+// 5.2 สร้าง api v3 ด้วยการ Query Params
+func AsciiEndpoint(c *fiber.Ctx) error {
+	
+	taxID := c.Query("tax_id")
+
+	if taxID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "จำเป็นต้องระบุ Query parameter 'tax_id'"})
 	}
 
-	fact := 1
-	for i := 2; i <= num; i++ {
-		fact *= i
+	name := c.Params("name")
+	fmt.Printf("Params 'name': %s\n", name)
+
+	asciiStrings := make([]string, len(taxID))
+	fmt.Printf("Slice ก่อนเข้าลูป: %q\n", asciiStrings)
+
+	for i, ch := range taxID {
+		asciiStrings[i] = strconv.Itoa(int(ch))
+		
+		fmt.Printf("   รอบที่ i=%d: ดึงอักษร '%c' -> แปลงเป็นข้อความ \"%s\" -> Slice ปัจจุบัน: %q\n", i, ch, asciiStrings[i], asciiStrings)
 	}
+
+	finalTaxID := strings.Join(asciiStrings, " ")
 
 	return c.JSON(fiber.Map{
-		"number":    num,
-		"factorial": fact,
+		"name":   name,
+		"tax_id": finalTaxID, 
 	})
 }
 
+// 6. api methos POST v1 Resigter 
+func RegisterEndpoint(c *fiber.Ctx) error {
 
+	var req m.Register
 
+	if err := c.BodyParser(&req); err != nil {
 
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "fail",
+			"message": "รูปแบบข้อมูล JSON ไม่ถูกต้อง",
+		})
+	}
 
+	if err := validate.Struct(&req); err != nil {
 
+		errors := formatValidationErrors(err.(validator.ValidationErrors))
+		
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"status":  "fail",
+			"message": "การตรวจสอบข้อมูลล้มเหลว",
+			"errors":  errors,
+		})
+	}
 
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":  "success",
+		"message": "ลงทะเบียนสมาชิกสำเร็จ",
+		"data":    req,
+	})
+}
+
+// 7.0.1 Company CRUD 
+func GetCompaniesEndpoint(c *fiber.Ctx) error {
+	db := database.DBConn
+	var companies []m.Company
+	db.Find(&companies)
+	return c.Status(fiber.StatusOK).JSON(companies)
+}
+
+func GetCompanyByIdEndpoint(c *fiber.Ctx) error {
+	db := database.DBConn
+	id := c.Params("id")
+	var company m.Company
+
+	result := db.First(&company, id)
+	if result.Error != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found"})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(company)
+}
+
+func AddCompanyEndpoint(c *fiber.Ctx) error {
+	db := database.DBConn
+	var company m.Company
+
+	if err := c.BodyParser(&company); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+	}
+
+	if err := db.Create(&company).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not create company"})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(company)
+}
+
+func UpdateCompanyEndpoint(c *fiber.Ctx) error {
+	db := database.DBConn
+	id := c.Params("id")
+	var company m.Company
+
+	if err := c.BodyParser(&company); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cannot parse JSON"})
+	}
+
+	if err := db.Where("id = ?", id).Updates(&company).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update company"})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(company)
+}
+
+func RemoveCompanyEndpoint(c *fiber.Ctx) error {
+	db := database.DBConn
+	id := c.Params("id")
+	var company m.Company
+
+	result := db.Delete(&company, id)
+	if result.RowsAffected == 0 {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Company not found"})
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+}

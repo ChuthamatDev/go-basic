@@ -1,47 +1,66 @@
 package routes
 
 import (
-	"go-fiber-test/controllers"
+	c "go-fiber-test/controllers"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/basicauth"
 )
 
-func InetRoutes(app *fiber.App) {
-	app.Use(basicauth.New(basicauth.Config{
-		Users: map[string]string{
-			"gofiber": "21022566",
-		},
+func createBasicAuth(users map[string]string) fiber.Handler {
+	return basicauth.New(basicauth.Config{
+		Users: users,
 		Unauthorized: func(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "Unauthorized access",
 			})
 		},
-	}))
+	})
+}
 
-	// version v1
+func InetRoutes(app *fiber.App) {
 	api := app.Group("/api")
+
+	authMiddleware := createBasicAuth(map[string]string{
+		"gofiber": "21022566",
+	})
+
+	// v1 Routes
 	v1 := api.Group("/v1")
-	v2 := api.Group("/v2")
+	v1.Post("/register", c.RegisterEndpoint)
 
-	v2.Get("/",controllers.HelloTestV2 )
-	v1.Get("/",controllers.HelloTest )
-	v1.Post("/",controllers.BodyPersonTest )
-	v1.Get("/user/:name",controllers.ParamsTest )
-	v1.Get("/fact/:number",controllers.Factorial )
-	v1.Post("/inet",controllers.QueryTest )
-	v1.Post("/valid",controllers.ValidTest )
+	v1Auth := v1.Group("/", authMiddleware)
+	v1Auth.Get("/", c.HelloTest)
+	v1Auth.Post("/", c.BodyPersonTest)
+	v1Auth.Get("/user/:name", c.ParamsTest)
+	v1Auth.Get("/fact/:number", c.FactorialEndpoint)
+	v1Auth.Post("/inet", c.QueryTest)
+	// v1Auth.Post("/valid", c.ValidTest)
 
-	//CRUD dogs
-   dog := v1.Group("/dog")
-   dog.Get("", controllers.GetDogs)
-   dog.Get("/filter", controllers.GetDog)
-   dog.Get("/json", controllers.GetDogsJson)
-   dog.Post("/", controllers.AddDog)
-   dog.Put("/:id", controllers.UpdateDog)
-   dog.Delete("/:id", controllers.RemoveDog)
+	dog := v1Auth.Group("/dog")
+	dog.Get("", c.GetDogs)
+	dog.Get("/filter", c.GetDog)
+	dog.Get("/json", c.GetDogsJson)
+	dog.Get("/json-v2", c.GetDogsJsonV2Endpoint)
+	dog.Get("/deleted", c.GetDeletedDogsEndpoint)
+	dog.Get("/range", c.GetDogsRangeEndpoint)
+	dog.Post("/", c.AddDog)
+	dog.Put("/:id", c.UpdateDog)
+	dog.Delete("/:id", c.RemoveDog)
 
-   //Factorial
-	fact := v1.Group("/fact")
-	fact.Get("/:number", controllers.Factorial)
+	// Company Routes
+	company := v1Auth.Group("/company")
+	company.Get("/", c.GetCompaniesEndpoint)
+	company.Get("/:id", c.GetCompanyByIdEndpoint)
+	company.Post("/", c.AddCompanyEndpoint)
+	company.Put("/:id", c.UpdateCompanyEndpoint)
+	company.Delete("/:id", c.RemoveCompanyEndpoint)
+
+	// v2 Routes
+	v2 := api.Group("/v2", authMiddleware)
+	v2.Get("/", c.HelloTestV2)
+
+	// v3 Routes
+	v3 := api.Group("/v3", authMiddleware)
+	v3.Get("/:name", c.AsciiEndpoint)
 }
