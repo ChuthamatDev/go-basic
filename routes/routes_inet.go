@@ -38,15 +38,16 @@ func InetRoutes(app *fiber.App) {
 	// v1Auth.Post("/valid", c.ValidTest)
 
 	dog := v1Auth.Group("/dog")
-	dog.Get("", c.GetDogs)
-	dog.Get("/filter", c.GetDog)
+	dog.Get("", c.GetDogsEndpoint)
+	dog.Get("/filter", c.GetDogEndpoint)
 	dog.Get("/json", c.GetDogsJson)
 	dog.Get("/json-v2", c.GetDogsJsonV2Endpoint)
+	dog.Post("/seed", c.SeedDogsEndpoint)
 	dog.Get("/deleted", c.GetDeletedDogsEndpoint)
 	dog.Get("/range", c.GetDogsRangeEndpoint)
-	dog.Post("/", c.AddDog)
-	dog.Put("/:id", c.UpdateDog)
-	dog.Delete("/:id", c.RemoveDog)
+	dog.Post("/", c.AddDogEndpoint)
+	dog.Put("/:id", c.UpdateDogEndpoint)
+	dog.Delete("/:id", c.RemoveDogEndpoint)
 
 	// Company Routes
 	company := v1Auth.Group("/company")

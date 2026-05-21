@@ -17,6 +17,7 @@ type Dogs struct {
 	gorm.Model
 	Name  string `json:"name"`
 	DogID int    `json:"dog_id"`
+	Color string `json:"color"`
 }
 
 type Register struct {
@@ -33,6 +34,7 @@ type DogsRes struct {
 	Name  string `json:"name"`
 	DogID int    `json:"dog_id"`
 	Type  string `json:"type"`
+	Color string `json:"color"`
 }
 
 type ResultData struct {
@@ -41,10 +43,24 @@ type ResultData struct {
 	Count int       `json:"count"`
 }
 
-type ResultDataV2 struct {
-	Data     []DogsRes `json:"data"`
-	NameDog  string    `json:"name_dog"`
-	CountSum int       `json:"count_sum"`
+type ResultDataV3 struct {
+	Data        []DogsRes `json:"data"`
+	Name        string    `json:"name"`
+	Count       int       `json:"count"`
+	SumRed      int       `json:"sum_red"`
+	SumGreen    int       `json:"sum_green"`
+	SumPink     int       `json:"sum_pink"`
+	SumNoColor  int       `json:"sum_nocolor"`
+}
+
+func DogIDRangeScope(min, max int) func(*gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("dog_id > ? AND dog_id < ?", min, max)
+	}
+}
+
+func DeletedDogsScope(db *gorm.DB) *gorm.DB {
+	return db.Unscoped().Where("deleted_at IS NOT NULL")
 }
 
 type Company struct {
