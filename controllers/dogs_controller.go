@@ -84,8 +84,11 @@ func RemoveDogEndpoint(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
+// 7.2 สร้างข้อมูลในตาราง dog มากกว่า 10 ตัว (api add dog) GetdogJson 
 func GetDogsJsonV2Endpoint(c *fiber.Ctx) error {
+
 	var dogs []m.Dogs
+
 	if err := database.DBConn.Find(&dogs).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not fetch dogs"})
 	}
@@ -93,6 +96,7 @@ func GetDogsJsonV2Endpoint(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(buildDogsResult(dogs))
 }
 
+// *7.0.2 สร้าง api GET ใน group dogs โชว์ข้อมูลที่ถูกลบไปแล้ว ตารางdogs
 func GetDeletedDogsEndpoint(c *fiber.Ctx) error {
 	var dogs []m.Dogs
 	if err := database.DBConn.Scopes(m.DeletedDogsScope).Find(&dogs).Error; err != nil {
@@ -103,7 +107,9 @@ func GetDeletedDogsEndpoint(c *fiber.Ctx) error {
 }
 
 func GetDogsRangeEndpoint(c *fiber.Ctx) error {
+
 	var dogs []m.Dogs
+	
 	if err := database.DBConn.Scopes(m.DogIDRangeScope(50, 100)).Find(&dogs).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not fetch dogs"})
 	}
@@ -111,8 +117,19 @@ func GetDogsRangeEndpoint(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(dogs)
 }
 
+// 7.2 สร้างข้อมูลในตาราง dog มากกว่า 10 ตัว (api add dog) GetdogJson 
 func GetDogsJson(c *fiber.Ctx) error {
-	return GetDogsJsonV2Endpoint(c)
+	// 1. ดึงข้อมูลสุนัขทั้งหมดจาก Database
+	var dogs []m.Dogs
+	if err := database.DBConn.Find(&dogs).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not fetch dogs"})
+	}
+
+	// 2. เรียกใช้ฟังก์ชันแยก (Helper Function) เพื่อประกอบร่างข้อมูลและนับยอด
+	result := buildDogsResult(dogs)
+
+	// 3. ส่งผลลัพธ์กลับเป็น JSON
+	return c.Status(fiber.StatusOK).JSON(result)
 }
 
 func SeedDogsEndpoint(c *fiber.Ctx) error {
@@ -144,27 +161,34 @@ func SeedDogsEndpoint(c *fiber.Ctx) error {
 	})
 }
 
+// ฟังก์ชันแยกสำหรับทำ Business Logic: แยกสีและรวมยอด
 func buildDogsResult(dogs []m.Dogs) m.ResultDataV3 {
+	// ประกาศตัวแปรรอรับผลลัพธ์
 	result := m.ResultDataV3{
-		Data:      make([]m.DogsRes, 0, len(dogs)),
-		Name:      "golang-test",
-		Count:     len(dogs),
-		SumRed:    0,
-		SumGreen:  0,
-		SumPink:   0,
+		Data:       make([]m.DogsRes, 0, len(dogs)),
+		Name:       "golang-test",
+		Count:      len(dogs),
+		SumRed:     0,
+		SumGreen:   0,
+		SumPink:    0,
 		SumNoColor: 0,
 	}
 
 	for _, dog := range dogs {
-		color := resolveDogColor(dog.DogID)
-		switch color {
-		case "red":
+		var color string
+
+		switch {
+		case dog.DogID >= 10 && dog.DogID <= 50:
+			color = "red"
 			result.SumRed++
-		case "green":
+		case dog.DogID >= 100 && dog.DogID <= 150:
+			color = "green"
 			result.SumGreen++
-		case "pink":
+		case dog.DogID >= 200 && dog.DogID <= 250:
+			color = "pink"
 			result.SumPink++
 		default:
+			color = "no color"
 			result.SumNoColor++
 		}
 
@@ -172,7 +196,7 @@ func buildDogsResult(dogs []m.Dogs) m.ResultDataV3 {
 			Name:  dog.Name,
 			DogID: dog.DogID,
 			Type:  color,
-			Color: color,
+			Color: color, 
 		})
 	}
 

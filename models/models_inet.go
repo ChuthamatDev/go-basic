@@ -71,3 +71,34 @@ type Company struct {
 	Phone       string `json:"phone"`
 	Email       string `json:"email"`
 }
+
+type ProfileUser struct {
+	gorm.Model
+	EmployeeID string `json:"employee_id"`
+	Name 		string `json:"name" validate:"required,min=2"`
+	Lastname 	string `json:"lastname" validate:"required,min=2"`
+	Birthday    string `json:"birthday" validate:"required"`
+	Age 		int    `json:"age" validate:"required,gte=0"`
+	Email 		string `json:"email" validate:"required,email"`
+	Telephone 	string `json:"tel" validate:"required,numeric"`
+}
+
+func SearchUserScope(keyword string) func(*gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		if keyword == "" {
+			return db
+		}
+		searchTerm := "%" + keyword + "%"
+		return db.Where("employee_id LIKE ? OR name LIKE ? OR lastname LIKE ?", searchTerm, searchTerm, searchTerm)
+	}
+}
+
+type UserGenerationResult struct {
+	Data         []ProfileUser `json:"data"`
+	Count        int           `json:"count"`
+	GenZ         int           `json:"gen_z"`
+	GenY         int           `json:"gen_y"`
+	GenX         int           `json:"gen_x"`
+	BabyBoomer   int           `json:"baby_boomer"`
+	GIGeneration int           `json:"gi_generation"`
+}

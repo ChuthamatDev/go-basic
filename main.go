@@ -27,7 +27,7 @@ func initDatabase() {
        panic(err)
    }
    fmt.Println("Database connected!")
-	if err := database.DBConn.AutoMigrate(&m.Dogs{}, &m.Company{}); err != nil {
+	if err := database.DBConn.AutoMigrate(&m.Dogs{}, &m.Company{}, &m.ProfileUser{}); err != nil {
 		panic(err)
 	}
 }

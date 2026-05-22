@@ -25,23 +25,33 @@ func InetRoutes(app *fiber.App) {
 		"gofiber": "21022566",
 	})
 
+	// workshop final
+	basicAuth := createBasicAuth(map[string]string{
+		"testgo": "23012023",
+	})
+
+
 	// v1 Routes
 	v1 := api.Group("/v1")
 	v1.Post("/register", c.RegisterEndpoint)
 
-	v1Auth := v1.Group("/", authMiddleware)
-	v1Auth.Get("/", c.HelloTest)
-	v1Auth.Post("/", c.BodyPersonTest)
-	v1Auth.Get("/user/:name", c.ParamsTest)
-	v1Auth.Get("/fact/:number", c.FactorialEndpoint)
-	v1Auth.Post("/inet", c.QueryTest)
-	// v1Auth.Post("/valid", c.ValidTest)
+	// แยกกลุ่มที่ใช้ gofiber auth ออกมาให้ชัดเจน (ไม่ใช้ "/" เพื่อไม่ให้ทับกับกลุ่มอื่น)
+	// หรือใช้ v1 โดยตรงแล้วใส่ middleware เป็นรายตัวในกลุ่มที่ต้องการ
+	
+	v1.Get("/", authMiddleware, c.HelloTest)
+	v1.Post("/", authMiddleware, c.BodyPersonTest)
+	v1.Get("/user-params/:name", authMiddleware, c.ParamsTest) // เปลี่ยนชื่อเพื่อไม่ให้สับสนกับ /user
+	v1.Get("/fact/:number", authMiddleware, c.FactorialEndpoint)
+	v1.Post("/inet", authMiddleware, c.QueryTest)
 
-	dog := v1Auth.Group("/dog")
+	dog := v1.Group("/dog", authMiddleware)
 	dog.Get("", c.GetDogsEndpoint)
 	dog.Get("/filter", c.GetDogEndpoint)
 	dog.Get("/json", c.GetDogsJson)
+
+	// 7.2  สร้างข้อมูลในตาราง dog มากกว่า 10 ตัว (api add dog) GetdogJson
 	dog.Get("/json-v2", c.GetDogsJsonV2Endpoint)
+	
 	dog.Post("/seed", c.SeedDogsEndpoint)
 	dog.Get("/deleted", c.GetDeletedDogsEndpoint)
 	dog.Get("/range", c.GetDogsRangeEndpoint)
@@ -49,8 +59,17 @@ func InetRoutes(app *fiber.App) {
 	dog.Put("/:id", c.UpdateDogEndpoint)
 	dog.Delete("/:id", c.RemoveDogEndpoint)
 
-	// Company Routes
-	company := v1Auth.Group("/company")
+	// Workshop filnal
+	userGroup := v1.Group("/user")
+	userGroup.Get("", c.GetProfileUserEndpoint)
+	userGroup.Get("/generations", c.GetUserGenerationsEndpoint)
+	userGroup.Get("/search", c.SearchProfileUsersEndpoint)
+	userGroup.Post("/seed", basicAuth, c.SeedProfileUsersEndpoint)
+	userGroup.Post("/",basicAuth, c.AddProfileUserEndpoint)
+	userGroup.Put("/:id",basicAuth, c.UpdateProfileUserEndpoint)
+	userGroup.Delete("/:id",basicAuth, c.RemoveProfileUserEndpoint)
+
+	company := v1.Group("/company", authMiddleware)
 	company.Get("/", c.GetCompaniesEndpoint)
 	company.Get("/:id", c.GetCompanyByIdEndpoint)
 	company.Post("/", c.AddCompanyEndpoint)

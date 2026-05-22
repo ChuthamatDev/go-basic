@@ -71,6 +71,8 @@ func formatValidationErrors(errs validator.ValidationErrors) []string {
 			message = "ประเภทธุรกิจที่เลือกไม่ถูกต้อง"
 		case "website_custom":
 			message = "Website ต้องเป็น subdomain ที่ลงท้ายด้วย .sogodweb.com, .sogodweb.co.th, หรือ .sogodweb.in.th"
+		case "numeric":
+			message = fmt.Sprintf("ฟิลด์ %s ต้องเป็นตัวเลขเท่านั้น", err.Field())
 		default:
 			message = fmt.Sprintf("ข้อมูลฟิลด์ %s ไม่ถูกต้อง", err.Field())
 		}
